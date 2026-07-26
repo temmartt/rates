@@ -1,0 +1,44 @@
+const { Telegraf, Markup } = require('telegraf');
+
+const BOT_TOKEN = '8268637577:AAGC4_AcnsiMJ5RTdhVyr5e6JOfjC4AZY34';
+const bot = new Telegraf(BOT_TOKEN);
+
+bot.start(async (ctx) => {
+    await ctx.reply(
+        '👋 Привет! Я бот для курсов валют.',
+        Markup.keyboard([
+            ['📈 Курс валют', 'ℹ️ О боте']
+        ]).resize()
+    );
+});
+
+bot.hears('📈 Курс валют', async (ctx) => {
+    await ctx.reply('⏳ Загружаю курсы...');
+    
+    try {
+        // Используем тестовые данные (потом заменим на реальный API)
+        const rub = 92.50;
+        const rsd = 108.20;
+        
+        await ctx.reply(
+            `📊 *КУРС ВАЛЮТ (ТЕСТ)*\n\n` +
+            `🇺🇸 1 USD = ${rub} ₽ (RUB)\n` +
+            `🇺🇸 1 USD = ${rsd} дин. (RSD)\n\n` +
+            `⚠️ Тестовый режим`,
+            { parse_mode: 'Markdown' }
+        );
+    } catch (error) {
+        console.error('Ошибка:', error);
+        await ctx.reply('❌ Ошибка получения курсов');
+    }
+});
+
+bot.hears('ℹ️ О боте', async (ctx) => {
+    await ctx.reply('нужно больше денег 💸');
+});
+
+bot.launch();
+console.log('✅ Бот запущен! Отправьте /start в Telegram');
+ls -la
+node bot.js
+
