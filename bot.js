@@ -18,38 +18,78 @@ const server = app.listen(PORT, () => {
 const BOT_TOKEN = '8268637577:AAGC4_AcnsiMJ5RTdhVyr5e6JOfjC4AZY34';
 const bot = new Telegraf(BOT_TOKEN);
 
-// Функция получения курсов
+// Функция получения курсов с несколькими API
 async function getRates() {
+    // ПЕРВЫЙ API: frankfurter
     try {
-        const response = await axios.get('https://api.frankfurter.app/latest?from=USD&to=RUB,RSD,EUR');
+        const response = await axios.get('https://api.frankfurter.app/latest?from=USD&to=RUB,RSD,EUR', {
+            timeout: 5000
+        });
+        
         if (response.status === 200 && response.data && response.data.rates) {
-            return {
-                rub: response.data.rates.RUB,
-                rsd: response.data.rates.RSD,
-                eur: response.data.rates.EUR,
-                source: 'frankfurter.app'
-            };
-        }
-        throw new Error('Нет данных');
-    } catch (error) {
-        console.log('Frankfurter не сработал, пробуем резервный...');
-        try {
-            const response = await axios.get('https://api.exchangerate.host/latest?base=USD&symbols=RUB,RSD,EUR', {
-                timeout: 5000
-            });
-            if (response.data && response.data.rates) {
+            const rates = response.data.rates;
+            // Проверяем, что все курсы есть
+            if (rates.RUB && rates.RSD && rates.EUR) {
+                console.log('✅ Frankfurter сработал');
                 return {
-                    rub: response.data.rates.RUB,
-                    rsd: response.data.rates.RSD,
-                    eur: response.data.rates.EUR,
+                    rub: rates.RUB,
+                    rsd: rates.RSD,
+                    eur: rates.EUR,
+                    source: 'frankfurter.app'
+                };
+            }
+        }
+    } catch (error) {
+        console.log('❌ Frankfurter не сработал');
+    }
+
+    // ВТОРОЙ API: exchangerate.host
+    try {
+        const response = await axios.get('https://api.exchangerate.host/latest?base=USD&symbols=RUB,RSD,EUR', {
+            timeout: 5000
+        });
+        
+        if (response.status === 200 && response.data && response.data.rates) {
+            const rates = response.data.rates;
+            if (rates.RUB && rates.RSD && rates.EUR) {
+                console.log('✅ exchangerate.host сработал');
+                return {
+                    rub: rates.RUB,
+                    rsd: rates.RSD,
+                    eur: rates.EUR,
                     source: 'exchangerate.host'
                 };
             }
-        } catch (e) {
-            console.log('Резервный API не сработал');
-            return null;
         }
+    } catch (error) {
+        console.log('❌ exchangerate.host не сработал');
     }
+
+    // ТРЕТИЙ API: open.er-api.com (резервный)
+    try {
+        const response = await axios.get('https://open.er-api.com/v6/latest/USD', {
+            timeout: 5000
+        });
+        
+        if (response.status === 200 && response.data && response.data.rates) {
+            const rates = response.data.rates;
+            if (rates.RUB && rates.RSD && rates.EUR) {
+                console.log('✅ open.er-api.com сработал');
+                return {
+                    rub: rates.RUB,
+                    rsd: rates.RSD,
+                    eur: rates.EUR,
+                    source: 'open.er-api.com'
+                };
+            }
+        }
+    } catch (error) {
+        console.log('❌ open.er-api.com не сработал');
+    }
+
+    // Если все API не сработали
+    console.log('❌ Все API недоступны');
+    return null;
 }
 
 // --- КОМАНДЫ БОТА ---
@@ -64,6 +104,7 @@ bot.start(async (ctx) => {
     );
 });
 
+// Обработчики кнопок
 bot.hears(/^🇺🇸 USD → 🇷🇺 RUB$/, async (ctx) => {
     await showRate(ctx, 'USD', 'RUB', '🇺🇸 → 🇷🇺');
 });
@@ -84,6 +125,7 @@ bot.hears('📈 Все курсы сразу', async (ctx) => {
     await showAllRates(ctx);
 });
 
+// Функция показа одного курса
 async function showRate(ctx, from, to, emoji) {
     const msg = await ctx.reply('⏳ Загружаю курс...');
     try {
@@ -93,16 +135,29 @@ async function showRate(ctx, from, to, emoji) {
             await ctx.deleteMessage(msg.message_id);
             return;
         }
+
         let rate;
-        if (from === 'USD' && to === 'RUB') rate = rates.rub;
-        else if (from === 'EUR' && to === 'RUB') rate = rates.rub / rates.eur;
-        else if (from === 'USD' && to === 'RSD') rate = rates.rsd;
-        else if (from === 'EUR' && to === 'RSD') rate = rates.rsd / rates.eur;
+        let label;
+        
+        if (from === 'USD' && to === 'RUB') {
+            rate = rates.rub;
+            label = `1 USD = ${rate.toFixed(2)} RUB`;
+        } else if (from === 'EUR' && to === 'RUB') {
+            rate = rates.rub / rates.eur;
+            label = `1 EUR = ${rate.toFixed(2)} RUB`;
+        } else if (from === 'USD' && to === 'RSD') {
+            rate = rates.rsd;
+            label = `1 USD = ${rate.toFixed(2)} RSD`;
+        } else if (from === 'EUR' && to === 'RSD') {
+            rate = rates.rsd / rates.eur;
+            label = `1 EUR = ${rate.toFixed(2)} RSD`;
+        }
+
         await ctx.reply(
             `📊 *КУРС ${emoji}*\n\n` +
-            `💵 1 ${from} = ${rate.toFixed(2)} ${to}\n\n` +
+            `💵 ${label}\n\n` +
             `📅 ${new Date().toLocaleString('ru-RU')}\n` +
-            `🏦 ${rates.source}`,
+            `🏦 Источник: ${rates.source}`,
             { parse_mode: 'Markdown' }
         );
         await ctx.deleteMessage(msg.message_id);
@@ -113,6 +168,7 @@ async function showRate(ctx, from, to, emoji) {
     }
 }
 
+// Функция показа всех курсов
 async function showAllRates(ctx) {
     const msg = await ctx.reply('⏳ Загружаю все курсы...');
     try {
@@ -122,14 +178,20 @@ async function showAllRates(ctx) {
             await ctx.deleteMessage(msg.message_id);
             return;
         }
+
+        const usdToRub = rates.rub.toFixed(2);
+        const eurToRub = (rates.rub / rates.eur).toFixed(2);
+        const usdToRsd = rates.rsd.toFixed(2);
+        const eurToRsd = (rates.rsd / rates.eur).toFixed(2);
+
         await ctx.reply(
-            `📊 *ВСЕ КУРСЫ*\n\n` +
-            `🇺🇸 USD → 🇷🇺 RUB: 1 USD = ${rates.rub.toFixed(2)} RUB\n` +
-            `🇪🇺 EUR → 🇷🇺 RUB: 1 EUR = ${(rates.rub / rates.eur).toFixed(2)} RUB\n\n` +
-            `🇺🇸 USD → 🇷🇸 RSD: 1 USD = ${rates.rsd.toFixed(2)} RSD\n` +
-            `🇪🇺 EUR → 🇷🇸 RSD: 1 EUR = ${(rates.rsd / rates.eur).toFixed(2)} RSD\n\n` +
+            `📊 *ВСЕ КУРСЫ ВАЛЮТ*\n\n` +
+            `🇺🇸 USD → 🇷🇺 RUB: 1 USD = ${usdToRub} RUB\n` +
+            `🇪🇺 EUR → 🇷🇺 RUB: 1 EUR = ${eurToRub} RUB\n\n` +
+            `🇺🇸 USD → 🇷🇸 RSD: 1 USD = ${usdToRsd} RSD\n` +
+            `🇪🇺 EUR → 🇷🇸 RSD: 1 EUR = ${eurToRsd} RSD\n\n` +
             `📅 ${new Date().toLocaleString('ru-RU')}\n` +
-            `🏦 ${rates.source}`,
+            `🏦 Источник: ${rates.source}`,
             { parse_mode: 'Markdown' }
         );
         await ctx.deleteMessage(msg.message_id);
