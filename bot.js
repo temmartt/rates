@@ -18,6 +18,20 @@ const server = app.listen(PORT, () => {
 const BOT_TOKEN = '8268637577:AAGC4_AcnsiMJ5RTdhVyr5e6JOfjC4AZY34';
 const bot = new Telegraf(BOT_TOKEN);
 
+// Функция получения текущей даты с правильным часовым поясом
+function getCurrentTime() {
+    // Укажите ваш часовой пояс (Europe/Moscow, Europe/Berlin, Europe/London и т.д.)
+    return new Date().toLocaleString('ru-RU', { 
+        timeZone: 'Europe/Berlin',  // ← ИЗМЕНИТЕ НА ВАШ ЧАСОВОЙ ПОЯС
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+}
+
 // Функция получения курсов с несколькими API
 async function getRates() {
     // ПЕРВЫЙ API: frankfurter
@@ -28,7 +42,6 @@ async function getRates() {
         
         if (response.status === 200 && response.data && response.data.rates) {
             const rates = response.data.rates;
-            // Проверяем, что все курсы есть
             if (rates.RUB && rates.RSD && rates.EUR) {
                 console.log('✅ Frankfurter сработал');
                 return {
@@ -65,7 +78,7 @@ async function getRates() {
         console.log('❌ exchangerate.host не сработал');
     }
 
-    // ТРЕТИЙ API: open.er-api.com (резервный)
+    // ТРЕТИЙ API: open.er-api.com
     try {
         const response = await axios.get('https://open.er-api.com/v6/latest/USD', {
             timeout: 5000
@@ -87,7 +100,6 @@ async function getRates() {
         console.log('❌ open.er-api.com не сработал');
     }
 
-    // Если все API не сработали
     console.log('❌ Все API недоступны');
     return null;
 }
@@ -156,7 +168,7 @@ async function showRate(ctx, from, to, emoji) {
         await ctx.reply(
             `📊 *КУРС ${emoji}*\n\n` +
             `💵 ${label}\n\n` +
-            `📅 ${new Date().toLocaleString('ru-RU')}\n` +
+            `📅 ${getCurrentTime()}\n` +
             `🏦 Источник: ${rates.source}`,
             { parse_mode: 'Markdown' }
         );
@@ -190,7 +202,7 @@ async function showAllRates(ctx) {
             `🇪🇺 EUR → 🇷🇺 RUB: 1 EUR = ${eurToRub} RUB\n\n` +
             `🇺🇸 USD → 🇷🇸 RSD: 1 USD = ${usdToRsd} RSD\n` +
             `🇪🇺 EUR → 🇷🇸 RSD: 1 EUR = ${eurToRsd} RSD\n\n` +
-            `📅 ${new Date().toLocaleString('ru-RU')}\n` +
+            `📅 ${getCurrentTime()}\n` +
             `🏦 Источник: ${rates.source}`,
             { parse_mode: 'Markdown' }
         );
